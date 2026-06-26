@@ -1,0 +1,316 @@
+import requests, subprocess, textwrap
+from time import sleep
+import xml.etree.ElementTree as ET
+from lxml import etree
+
+
+
+
+def FetchNcbiMetadata(accession: str) -> dict:
+    """
+    Fetch metadata for a protein record from NCBI using an accession number.
+    Returns a flat dictionary of key metadata fields.
+    """
+
+    # Step 1: Search for the UID corresponding to the accession
+    params = {
+        "db": "protein",
+        "term": accession,
+        "retmode": "json",
+    }
+
+    url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+
+    max_tries = 5
+    for attempt in range(max_tries):
+        search = requests.get(url, params=params, timeout=300)
+        try:
+            data = search.json()
+            idlist = data["esearchresult"]["idlist"]
+            if idlist:  # success case
+                uid = idlist[0]
+                break
+        except Exception:
+            pass  # ignore and retry
+        sleep(1.5 * (attempt + 1))  # backoff
+    else:
+        raise RuntimeError(f"Failed to fetch UID for accession: {accession}")
+
+    # Step 2: Fetch the full summary record using the UID
+    fetch = requests.get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi", params={
+        "db": "protein",
+        "id": uid,
+        "retmode": "json",
+    })
+    sleep(0.3)
+
+    rec = fetch.json().get("result", {})
+    res = rec.get(str(uid))
+    if res is None:
+        raise RuntimeError(f"No summary record found for UID {uid}")
+
+    # subtype/subname are pipe-delimited strings encoding key-value feature pairs
+    # e.g. subtype="strain|country" subname="H1N1|USA" -> {"strain": "H1N1", "country": "USA"}
+    subtype = res.get("subtype")
+    subname = res.get("subname")
+
+    record = {
+        "uid": res.get("uid"),
+        "accession": res.get("caption"),
+        "title": res.get("title"),
+        "organism": res.get("organism"),
+        "taxonId": res.get("taxid"),
+        "sequence_length": res.get("slen"),
+        "create_date": res.get("createdate"),
+        "update_date": res.get("updatedate"),
+        "dbsource": res.get("sourcedb"),
+        "extra": res.get("extra"),
+    }
+
+    # Unpack subtype/subname pairs into top-level record keys (if present)
+    if subtype and subname:
+        type_parts = subtype.split("|")
+        name_parts = subname.split("|")
+        for t, n in zip(type_parts, name_parts):
+            if t and n:
+                record[t] = n
+
+    return record
+
+
+def TaxId2Taxon(taxid):
+    """ Get taxon name from NCBI taxonomy id"""
+    url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+
+    params = {
+        "db": "taxonomy",
+        "id": taxid,
+        "retmode": "xml"
+    }
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    root = ET.fromstring(r.text)
+
+    # Extract scientific name
+    name = root.findtext(".//Item[@Name='ScientificName']")
+    return name
+
+
+def FetchPMIDS(accession: str, db: str,) -> list[dict]:
+    """
+    Given a protein accession, return associated PubMed ids.
+    """
+
+    base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+
+    # Step 1: Get UID from accession
+    search = requests.get(base + "esearch.fcgi", params={
+        "db": db,
+        "term": accession,
+        "retmode": "json",
+    }).json()
+    sleep(0.3)
+
+    ids = search.get("esearchresult", {}).get("idlist", [])
+
+    if not ids:
+        return []
+    uid = ids[0]
+
+    # Step 2: Link to PubMed
+    response = requests.get(base + "elink.fcgi", params={
+        "dbfrom": db,
+        "db": "pubmed",
+        "id": uid,
+        "retmode": "json",
+    })
+    sleep(0.3)
+
+    try:
+        link = response.json()
+    except ValueError:
+        print("Bad JSON in elink:")
+        return []
+
+    try:
+        pmids = link["linksets"][0]["linksetdbs"][0]["links"]
+    except (KeyError, IndexError):
+        return []
+    if not pmids:
+        return []
+
+    # Step 3: Fetch PubMed summaries
+    summaries = requests.get(base + "esummary.fcgi", params={
+        "db": "pubmed",
+        "id": ",".join(pmids),
+        "retmode": "json",
+    }).json()
+    sleep(0.3)
+
+    return pmids
+
+
+def PMID2PMCID(pmid: str) -> str | None:
+
+    url = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/"
+
+    res = requests.get(
+        url,
+        params={
+            "ids": pmid,
+            "format": "json"
+        },
+        timeout=10
+    )
+    sleep(0.5)
+
+    if res.status_code != 200:
+        return None
+    try:
+        data = res.json()
+    except ValueError:
+        return None
+    records = data.get("records", [])
+
+    if not records:
+        return None
+    return records[0].get("pmcid")
+
+
+def FetchLiteraturePMID(pmid: str) -> str | None:
+    """
+    Return the abstract text for a given PMID.
+    Returns None if no abstract is available.
+    """
+
+    res = requests.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+        params={
+            "db": "pubmed",
+            "id": pmid,
+            "retmode": "xml",
+        },
+    )
+    sleep(0.3)
+
+    return res.text
+
+
+def CleanXml(xml_text: str) -> dict | None:
+
+    try:
+        # Skip empty inputs
+        if not xml_text or not xml_text.strip():
+            return None
+        parser = etree.XMLParser(recover=True)
+        root = etree.fromstring(xml_text.encode(), parser)
+
+        # Failed parse
+        if root is None:
+            return None
+
+        # Title
+        title_elem = root.find(".//ArticleTitle")
+        title = (
+            "".join(title_elem.itertext()).strip()
+            if title_elem is not None
+            else None
+        )
+
+        # Abstract
+        abstract_parts = []
+        for elem in root.findall(".//AbstractText"):
+            text = "".join(elem.itertext()).strip()
+            if text:
+                abstract_parts.append(text)
+        abstract = (
+            " ".join(abstract_parts).strip()
+            if abstract_parts
+            else None
+        )
+
+        # Fallback abstract
+        if not abstract:
+            full_abstract = root.find(".//Abstract")
+            if full_abstract is not None:
+                abstract = "".join(full_abstract.itertext()).strip() or None
+
+        # Skip empty records
+        if not title and not abstract:
+            return None
+        return {
+            "title": title,
+            "abstract": abstract
+        }
+
+    except Exception as e:
+        print(f"XML parsing error: {e}")
+        return None
+
+
+def WritePaper(paper, save_dir):
+    width = 100
+    with open(save_dir, 'w') as f:
+        f.write(paper['title'] + "\n\n")
+        abstract = paper.get("abstract") or "[No abstract available]"
+        wrapped = textwrap.fill(abstract, width=width)
+        f.write(wrapped)
+
+
+def DownloadPaper(pmcid, save_dir):
+    aws='/usr/local/bin/aws'
+
+
+    out=subprocess.run(f'{aws} --no-sign-request s3 ls s3://pmc-oa-opendata/{pmcid}.1/', shell=True, capture_output=True, text=True)
+    if f'{pmcid}.1.txt' not in out.stdout and f'{pmcid}.1.pdf' not in out.stdout:
+        return None
+
+    if f'{pmcid}.1.txt' in out.stdout:
+        file_type = 'txt'
+    elif f'{pmcid}.1.pdf' in out.stdout:
+        file_type = 'pdf'
+
+    #Download paper3
+    subprocess.run(f'{aws} --no-sign-request  s3 cp s3://pmc-oa-opendata/{pmcid}.1/{pmcid}.1.{file_type} {save_dir}', shell=True, capture_output=True)
+
+
+
+def SearchPubmed(query: str, max_results: int = 20) -> list[str]:
+    """
+    Search PubMed and PubMed Cental using a text query and return a list of PMIDs.
+    """
+    url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+
+    res = requests.get(url, params={
+        "db": "pubmed",
+        "term": query,
+        "retmode": "json",
+        "retmax": max_results
+    })
+    try:
+        data = res.json()
+        pmids = data.get("esearchresult", {}).get("idlist", [])
+        sleep(0.5)
+    except requests.exceptions.JSONDecodeError:
+        pmids = []
+
+
+    # Search pubmed Central
+    res = requests.get(url, params={
+        "db": "pmc",
+        "term": query,
+        "retmode": "json",
+        "retmax": max_results,
+    })
+
+    try:
+        data = res.json()
+        pmcids = data.get("esearchresult", {}).get("idlist", [])
+        pmcids = [f"PMC{pmc}" for pmc in pmcids]
+        sleep(0.5)
+    except requests.exceptions.JSONDecodeError:
+        pmcids = []
+
+    paper_ids= pmcids + pmids
+
+    return paper_ids
