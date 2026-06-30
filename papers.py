@@ -314,3 +314,26 @@ def SearchPubmed(query: str, max_results: int = 20) -> list[str]:
     paper_ids= pmcids + pmids
 
     return paper_ids
+
+def CreateAccessionLibrary(accession):
+
+    pmids=FetchPMIDS(accession, 'protein')
+    papers=[]
+    paper_map={}
+    for pmid in pmids:
+        pmcid=PMID2PMCID(pmid)
+        if pmcid:
+            papers.append(pmcid)
+        if not pmcid:
+            papers.append(pmid)
+
+    paper_map['accession']=papers
+
+    os.makedirs(f'downloads/{accession}', exist_ok=True)
+    for paper in paper_map['accession']:
+        if paper.startswith('PMC'):
+            DownloadPaper(paper, f'downloads/{accession}/{paper}.txt')
+        else:
+            p=FetchLiteraturePMID(paper)
+            p=CleanXml(p)
+            WritePaper(p, f'downloads/{accession}/{paper}.txt')

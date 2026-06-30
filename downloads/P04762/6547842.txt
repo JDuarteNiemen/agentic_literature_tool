@@ -1,0 +1,10 @@
+Molecular cloning of cDNA for rat liver catalase.
+
+For the studies on the induction of peroxisomal enzymes by hypolipidemic agents, we have tried to
+isolate a cDNA clone for rat liver catalase. A recombinant clone, pMJ501, was isolated, of which
+cDNA insert specifically hybridized to catalase mRNA in hybridization-selected translation. On RNA
+blot hybridization, it hybridized to 2.4-kilobases RNA which was increased about 1.5-fold by the
+administration of di-(2-ethylhexyl)phthalate to the rats. The nucleotide sequence of the cDNA
+contains a reading frame for 109 amino acid residues which match the reported amino acid sequence of
+bovine liver catalase at the carboxyl end with 82% homology. It is concluded that pMJ501 contains a
+cDNA sequence for rat liver catalase.

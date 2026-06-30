@@ -1,0 +1,16 @@
+Novel insights into renal D-amino acid oxidase accumulation: propiverine changes DAAO localization and peroxisomal size in vivo.
+
+Chronic exposure to propiverine, a frequently prescribed pharmaceutical for treatment of overactive
+bladder and incontinence, provokes massive protein accumulation in the cytosol and nucleus of renal
+proximal tubule epithelial cells in rats. Previously, the accumulating protein was identified as
+D-amino acid oxidase (DAAO), a peroxisomal flavoenzyme expressed in kidney, liver and brain. The
+cellular mechanism of propiverine-induced DAAO accumulation, however, remains unexplained and poorly
+characterized. Therefore, to further increase the understanding of DAAO accumulation in rat kidney,
+this study aimed to characterize DAAO accumulations using differential immunofluorescent staining of
+rat kidney sections as well as in vitro binding analyses and proteasomal activity studies. We
+demonstrated that propiverine is neither a ligand of DAAO nor an inhibitor of the proteasome in
+vitro. However, propiverine treatment resulted in a significant decrease of peroxisomal size in rat
+proximal tubule epithelial cells. Moreover, peroxisomal catalase also accumulated in the cytosol and
+nuclei of propiverine-treated rats concurrently with DAAO. Taken together, our study indicates that
+propiverine treatment affects the trafficking and/or degradation of peroxisomal proteins such as
+DAAO and catalase by a so far unique and unknown mechanism.

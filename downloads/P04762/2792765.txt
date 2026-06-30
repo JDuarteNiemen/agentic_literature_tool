@@ -1,0 +1,9 @@
+Isolation and characterization of the rat catalase-encoding gene.
+
+Using cDNA clones coding for rat liver catalase (hydrogen peroxide:hydrogen peroxide oxidoreductase,
+EC 1.11.1.6), overlapping genomic clones were isolated. By Southern blotting analysis and nucleotide
+sequencing, the gene was characterized to be about 33 kb in length and to have 13 exons and twelve
+introns. S1 mapping and primer extension analyses showed the presence of multiple transcription
+start points (tsp) located between 66 bp and 105 bp upstream from the translational start codon.
+Nucleotide sequence immediately upstream from the tsp lacks the TATA box but contains multiple CCAAT
+boxes and GC-like boxes.
